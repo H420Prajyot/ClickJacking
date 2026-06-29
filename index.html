@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clickjacking PoC Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 20px 30px;
+            border-bottom: 2px solid #0f3460;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            font-weight: 700;
+            color: #e94560;
+            letter-spacing: 1px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: #a0a0b8;
+            margin-top: 5px;
+        }
+
+        /* Input Section */
+        .input-section {
+            padding: 25px 30px;
+            background: #1a1a2e;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-section label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #c0c0d8;
+        }
+
+        .input-section input[type="url"] {
+            flex: 1;
+            min-width: 320px;
+            max-width: 700px;
+            padding: 12px 16px;
+            border: 2px solid #2a2a4a;
+            border-radius: 6px;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-section input[type="url"]:focus {
+            border-color: #e94560;
+        }
+
+        .input-section button {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-load {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-load:hover {
+            background: #d63851;
+            transform: translateY(-1px);
+        }
+
+        .btn-load:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-open {
+            background: #0f3460;
+            color: #fff;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn-open:hover {
+            background: #1a4a8a;
+            transform: translateY(-1px);
+        }
+
+        /* Controls */
+        .controls {
+            padding: 15px 30px;
+            background: #12121e;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            border-bottom: 1px solid #2a2a4a;
+        }
+
+        .controls label {
+            font-size: 13px;
+            color: #a0a0b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .controls input[type="range"] {
+            width: 120px;
+            accent-color: #e94560;
+        }
+
+        .controls input[type="number"] {
+            width: 70px;
+            padding: 4px 8px;
+            border: 1px solid #2a2a4a;
+            border-radius: 4px;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .badge.vulnerable {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .badge.protected {
+            background: #2ecc71;
+            color: #fff;
+        }
+
+        .badge.waiting {
+            background: #f39c12;
+            color: #fff;
+        }
+
+        /* Iframe Container */
+        .iframe-container {
+            flex: 1;
+            position: relative;
+            margin: 20px 30px;
+            border: 2px dashed #2a2a4a;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #0a0a14;
+            min-height: 400px;
+        }
+
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .iframe-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            border: 3px solid transparent;
+        }
+
+        .iframe-overlay.active {
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .iframe-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #555;
+            pointer-events: none;
+        }
+
+        .iframe-placeholder p {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .iframe-placeholder small {
+            font-size: 13px;
+            color: #444;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            padding: 12px 30px;
+            background: #1a1a2e;
+            border-top: 1px solid #2a2a4a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .status-bar .status-text {
+            color: #a0a0b8;
+        }
+
+        .status-bar .http-info {
+            display: flex;
+            gap: 20px;
+            color: #888;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* Decoy button overlay simulation */
+        .decoy-overlay {
+            display: none;
+            position: absolute;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .decoy-overlay.show {
+            display: block;
+        }
+
+        .decoy-overlay .decoy-btn {
+            padding: 14px 40px;
+            background: #2ecc71;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 4px 20px rgba(46, 204, 113, 0.4);
+            position: absolute;
+        }
+
+        /* Info box */
+        .info-box {
+            padding: 20px 30px;
+            background: #12121e;
+            border-top: 1px solid #2a2a4a;
+            display: none;
+        }
+
+        .info-box.show {
+            display: block;
+        }
+
+        .info-box h3 {
+            color: #e94560;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            color: #a0a0b8;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .info-box code {
+            background: #0f0f1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #e94560;
+        }
+
+        /* GitHub ribbon */
+        .github-corner {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .input-section input[type="url"] {
+                min-width: 100%;
+            }
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .iframe-container {
+                margin: 10px 15px;
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <h1>Clickjacking PoC Tester</h1>
+        <p>Proof of Concept — Insert a target URL to test iframe embeddability</p>
+    </div>
+
+    <!-- INPUT SECTION -->
+    <div class="input-section">
+        <label for="targetUrl">Target URL:</label>
+        <input type="url" id="targetUrl" placeholder="https://example.com/sensitive-page" value="">
+        <button class="btn-load" id="loadBtn" onclick="loadTarget()">Load in Iframe</button>
+        <a class="btn-open" id="openDirectBtn" href="#" target="_blank" style="display:none;" onclick="openDirect()">Open directly ↗</a>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+        <label>
+            Opacity:
+            <input type="range" id="opacitySlider" min="0" max="100" value="80" oninput="updateOpacity()">
+            <span id="opacityVal">0.80</span>
+        </label>
+        <label>
+            Width:
+            <input type="number" id="iframeWidth" value="100" min="10" max="100" onchange="resizeIframe()"> %
+        </label>
+        <label>
+            Height:
+            <input type="number" id="iframeHeight" value="100" min="10" max="100" onchange="resizeIframe()"> %
+        </label>
+        <label>
+            <input type="checkbox" id="topmostCheck" onchange="toggleTopmost()"> Z-index on top
+        </label>
+        <span id="statusBadge" class="badge waiting">Waiting</span>
+    </div>
+
+    <!-- IFRAME CONTAINER -->
+    <div class="iframe-container" id="iframeContainer">
+        <iframe id="targetIframe" sandbox="allow-scripts allow-forms allow-same-origin" src="about:blank"></iframe>
+        <div class="iframe-overlay" id="overlay"></div>
+        <div class="iframe-placeholder" id="placeholder">
+            <p>Enter a URL and click <strong>"Load in Iframe"</strong></p>
+            <small>If the page loads, it's likely vulnerable to clickjacking</small>
+        </div>
+        <div class="decoy-overlay" id="decoyOverlay">
+            <button class="decoy-btn" id="decoyBtn" onclick="decoyClicked()">🎉 Click Here to Claim Prize!</button>
+        </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+        <div class="status-text">
+            Status: <span id="statusText">Ready</span>
+        </div>
+        <div class="http-info">
+            <span>Framed: <span id="framedStatus">—</span></span>
+            <span>Last tested: <span id="lastTested">—</span></span>
+        </div>
+    </div>
+
+    <!-- INFO BOX -->
+    <div class="info-box" id="infoBox">
+        <h3>What does this mean?</h3>
+        <p>
+            <strong>Vulnerable:</strong> The target page loaded inside the iframe. This means it lacks
+            <code>X-Frame-Options</code> (DENY or SAMEORIGIN) and a proper
+            <code>Content-Security-Policy: frame-ancestors</code> header. An attacker could overlay
+            decoy UI on top and trick users into clicking buttons on the hidden target page.
+        </p>
+        <p>
+            <strong>Protected:</strong> The target page refused to load in the iframe (shows blank or error).
+            The site has clickjacking protections in place.
+        </p>
+        <p style="margin-top:8px; font-size:12px; color:#666;">
+            💡 Try the "Decoy Overlay" simulation by checking "Show decoy button" in controls to see
+            how a real attack would look.
+        </p>
+    </div>
+
+    <script>
+        let currentUrl = '';
+        let loaded = false;
+
+        function loadTarget() {
+            const urlInput = document.getElementById('targetUrl');
+            let url = urlInput.value.trim();
+
+            if (!url) {
+                alert('Please enter a URL.');
+                return;
+            }
+
+            // Auto-prepend protocol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+                urlInput.value = url;
+            }
+
+            const iframe = document.getElementById('targetIframe');
+            const placeholder = document.getElementById('placeholder');
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            const framedStatus = document.getElementById('framedStatus');
+            const lastTested = document.getElementById('lastTested');
+            const infoBox = document.getElementById('infoBox');
+            const openDirectBtn = document.getElementById('openDirectBtn');
+
+            currentUrl = url;
+            badge.className = 'badge waiting';
+            badge.textContent = 'Testing...';
+            statusText.textContent = 'Loading ' + url + ' ...';
+            placeholder.style.display = 'none';
+
+            // Update direct open link
+            openDirectBtn.style.display = 'inline-flex';
+            openDirectBtn.href = url;
+
+            // Reset overlay
+            document.getElementById('overlay').classList.remove('active');
+
+            // Load URL in iframe
+            iframe.src = url;
+            loaded = true;
+
+            // We'll check status after load attempt
+            iframe.onload = function() {
+                // Check if content actually loaded (not blocked)
+                try {
+                    // Try to access iframe content - will throw if cross-origin or blocked
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    // If we get here and it has body content, it loaded
+                    const bodyContent = doc.body ? doc.body.innerHTML : '';
+                    if (bodyContent && bodyContent.length > 50) {
+                        badge.className = 'badge vulnerable';
+                        badge.textContent = '⚠ VULNERABLE';
+                        statusText.textContent = 'Target loaded in iframe — vulnerable to clickjacking';
+                        framedStatus.textContent = 'Loaded ✅';
+                        infoBox.style.display = 'block';
+                        infoBox.querySelector('h3').textContent = '⚠ Target is VULNERABLE';
+                        infoBox.querySelector('h3').style.color = '#e94560';
+                    } else {
+                        badge.className = 'badge protected';
+                        badge.textContent = '✓ Protected';
+                        statusText.textContent = 'Target appears empty or blocked';
+                        framedStatus.textContent = 'Empty/Loaded';
+                    }
+                } catch (e) {
+                    // Cross-origin access blocked or load failed
+                    // Check if we can detect via indirect means
+                    if (iframe.src !== 'about:blank') {
+                        // It loaded cross-origin - site is vulnerable (iframe loaded)
+                        badge.className = 'badge vulnerable';
+                        badge.textContent = '⚠ VULNERABLE';
+                        statusText.textContent = 'Target loaded (cross-origin) — vulnerable to clickjacking';
+                        framedStatus.textContent = 'Loaded (cross-origin) ✅';
+                        infoBox.style.display = 'block';
+                        infoBox.querySelector('h3').textContent = '⚠ Target is VULNERABLE';
+                        infoBox.querySelector('h3').style.color = '#e94560';
+                    } else {
+                        badge.className = 'badge protected';
+                        badge.textContent = '✓ Protected';
+                        statusText.textContent = 'Target did not load — clickjacking protections in place';
+                        framedStatus.textContent = 'Blocked 🔒';
+                    }
+                }
+                lastTested.textContent = new Date().toLocaleTimeString();
+            };
+
+            iframe.onerror = function() {
+                badge.className = 'badge protected';
+                badge.textContent = '✓ Protected';
+                statusText.textContent = 'Failed to load — likely protected';
+                framedStatus.textContent = 'Blocked 🔒';
+                lastTested.textContent = new Date().toLocaleTimeString();
+            };
+        }
+
+        function updateOpacity() {
+            const val = document.getElementById('opacitySlider').value;
+            const opacity = val / 100;
+            document.getElementById('opacityVal').textContent = opacity.toFixed(2);
+            document.getElementById('targetIframe').style.opacity = opacity;
+        }
+
+        function resizeIframe() {
+            const w = document.getElementById('iframeWidth').value;
+            const h = document.getElementById('iframeHeight').value;
+            const iframe = document.getElementById('targetIframe');
+            iframe.style.width = w + '%';
+            iframe.style.height = h + '%';
+            iframe.style.margin = 'auto';
+            iframe.style.display = 'block';
+        }
+
+        function toggleTopmost() {
+            const checked = document.getElementById('topmostCheck').checked;
+            const overlay = document.getElementById('overlay');
+            if (checked) {
+                overlay.style.zIndex = '9999';
+                overlay.classList.add('active');
+            } else {
+                overlay.style.zIndex = '10';
+                overlay.classList.remove('active');
+            }
+        }
+
+        function openDirect() {
+            if (currentUrl) {
+                window.open(currentUrl, '_blank');
+            }
+        }
+
+        function decoyClicked() {
+            alert('🎯 CLICKJACKING DEMONSTRATION\n\nIf this was a real attack, the button click would have triggered an action on the hidden target page (e.g., liking a post, transferring funds, changing settings) without your knowledge or consent.');
+        }
+
+        // Allow Enter key to trigger load
+        document.getElementById('targetUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadTarget();
+            }
+        });
+
+        // Also allow paste-triggered loading? No, let user click.
+
+        // Show decoy button toggle - add to controls
+        document.addEventListener('DOMContentLoaded', function() {
+            const controls = document.querySelector('.controls');
+            const decoyLabel = document.createElement('label');
+            decoyLabel.innerHTML = '<input type="checkbox" id="showDecoy" onchange="toggleDecoy()"> Show decoy overlay';
+            controls.appendChild(decoyLabel);
+
+            // Initialize opacity
+            updateOpacity();
+
+            // Pre-fill with example
+            document.getElementById('targetUrl').placeholder = 'https://example.com/sensitive-page';
+
+            // Add a test preset button
+            const presetBtn = document.createElement('button');
+            presetBtn.className = 'btn-load';
+            presetBtn.style.background = '#2a2a4a';
+            presetBtn.style.fontSize = '12px';
+            presetBtn.style.padding = '8px 16px';
+            presetBtn.textContent = 'Test with example.com';
+            presetBtn.onclick = function() {
+                document.getElementById('targetUrl').value = 'https://example.com';
+                loadTarget();
+            };
+            document.querySelector('.input-section').appendChild(presetBtn);
+        });
+
+        function toggleDecoy() {
+            const show = document.getElementById('showDecoy').checked;
+            const decoyOverlay = document.getElementById('decoyOverlay');
+            const container = document.getElementById('iframeContainer');
+            const iframe = document.getElementById('targetIframe');
+
+            if (show && currentUrl) {
+                // Position the decoy button over a specific area of the iframe
+                decoyOverlay.style.display = 'block';
+                decoyOverlay.classList.add('show');
+
+                // Center the decoy button in the container
+                const btn = document.getElementById('decoyBtn');
+                const rect = container.getBoundingClientRect();
+                btn.style.left = (rect.width / 2 - 100) + 'px';
+                btn.style.top = (rect.height / 2 - 30) + 'px';
+
+                // Make the overlay active
+                document.getElementById('overlay').classList.add('active');
+            } else {
+                decoyOverlay.style.display = 'none';
+                decoyOverlay.classList.remove('show');
+                document.getElementById('overlay').classList.remove('active');
+            }
+        }
+    </script>
+
+</body>
+</html>
